@@ -1,8 +1,10 @@
-//https://github.com/jagenjo/litescene.js/blob/master/guides/components.md
-//https://github.com/jagenjo/litescene.js/blob/master/guides/programming_components.md
 // Natural Neighbour Interpolation
-// TODO: deactivate render2texture when no interaction
-
+// Visual implementation: http://webglstudio.org/gerard/nni/
+// Idea from: http://alexbeutel.com/webgl/voronoi.html
+// Paper:
+//  Kenneth E. Hoff, III, John Keyser, Ming Lin, Dinesh Manocha, and Tim Culver. 1999. 
+//  Fast computation of generalized Voronoi diagrams using graphics hardware. 
+//  In Proceedings of the 26th annual conference on Computer graphics and interactive techniques (SIGGRAPH '99)
 
 // Important functions are:
 // addPoint(x,y); returns a coneNode. -- adds a new voronoi point. Removes NNI point if necessary. It's name is the id used for weights
@@ -132,11 +134,17 @@ NNI.prototype.onAfterRender = function(){
     return;
   }
   
+  // GUI texture
+  if (this.showGUI)
+    this._texture = this._camOrth._frame.getColorTexture();
+  
+  
   if (!this._computeAverage){
     // Deactivate camera
   	this._camOrth.enabled = false;
     return;
   }
+  
   
   if (this._startNNI)
     this._startNNI = false;
@@ -174,8 +182,11 @@ NNI.prototype.onAfterRender = function(){
   
   // Stop computing average if no changes
   this._computeAverage = false;
-  // Deactivate camera
-  this._camOrth.enabled = false;
+  
+  // GUI texture
+  if (this.showGUI)
+    this._texture = this._camOrth._frame.getColorTexture();
+  
 }
 
 
@@ -221,7 +232,7 @@ NNI.prototype.addPoint = function(px, py, alpha){
   coneNode.setLayer(3, true);
   
   // Add Node to Scene
-  node.addChild(coneNode);
+  this.root.addChild(coneNode);
   
   // Add to cone arrays. Id is the hex color because we read pixels.
   var id = this.rgb2hex(coneMat.color);
@@ -357,7 +368,8 @@ NNI.prototype.rgb2hex = function(rgb, range){
 
 
 NNI.prototype.onRenderGUI = function(){
-  if (scene.state != LS.RUNNING)
+  
+  if (LS.GlobalScene.state != LS.RUNNING)
     return;
   
   if (!this.showGUI)
@@ -368,12 +380,13 @@ NNI.prototype.onRenderGUI = function(){
   
   gl.start2D();
   // Get texture from camera
-  var texture = this._texture;
+  
   if (this._camOrth){
     if (this._camOrth.enabled){
-			texture = this._camOrth._frame.getColorTexture();
+			this._texture = this._camOrth._frame.getColorTexture();
     }
   }
+  var texture = this._texture;
   
   // Texture pos and size
   var posx = 64;
@@ -387,6 +400,7 @@ NNI.prototype.onRenderGUI = function(){
   gl.fillStyle = "rgba(127,127,127,0.7)";
   gl.fillRect(posx*0.9, posy*0.9, size*1.1, keys.length * 20 + size*1.1);
   
+  var lastP = 0;
   for (var i = 0; i<keys.length; i++){
     var text = this.conesW[keys[i]].toFixed(2);
 
@@ -403,10 +417,26 @@ NNI.prototype.onRenderGUI = function(){
     gl.fillStyle = "rgba(" + c[0]*255 + "," + c[1]*255 + "," + c[2]*255 + ",0.8)";
     gl.fillRect(posx, i*20-5 + posy + size*1.1, 20, 15);
     gl.strokeRect(posx, i*20-5 +posy + size*1.1, 20, 15);
+    
+    // PERCENTAGE CAKE - Paint cake
+    if (this.cones[this._NNIUid]){
+      var rad = 70;
+      var centerX = posx + size + rad*1.5; var centerY = posy + size/2;
+      gl.strokeStyle = "rgba(255,255,255,0.8)";
+      gl.lineWidth = 2;
+      gl.beginPath();
+      gl.moveTo(centerX,centerY);
+      gl.arc(centerX,centerY,rad, lastP*2*Math.PI, (this.conesW[keys[i]]+lastP)*2*Math.PI);
+      gl.lineTo(centerX, centerY);
+      gl.closePath();
+      gl.fill();
+      gl.stroke();
+      lastP += this.conesW[keys[i]];
+    }
   }
   
   
-  // Paint texture as image
+  // TEXTURE - Paint texture as image
   if (texture){
     gl.drawImage(texture, posx,posy, size, size);
     // Draw points
@@ -417,6 +447,9 @@ NNI.prototype.onRenderGUI = function(){
       gl.fillRect(posx + cone.voronoiPos[0]*size,posy + cone.voronoiPos[1]*size, 2, 2);
     }
   }
+  
+  
+  
 
   
   gl.finish2D();
