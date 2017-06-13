@@ -41,7 +41,10 @@ function NNI(o) {
   
   // Render GUI
   this.showGUI = false;
+  this.GUIX = 64;
+  this.GUIY = 64;
   this._texture = null;
+  this._updateTexture = true;
   
   
   //if we have the state passed, then we restore the state
@@ -139,9 +142,12 @@ NNI.prototype.onAfterRender = function(){
     this._texture = this._camOrth._frame.getColorTexture();
   
   
-  if (!this._computeAverage){
-    // Deactivate camera
-  	this._camOrth.enabled = false;
+  if (!this._computeAverage){    
+    if (!this._updateTexture)
+      // Deactivate camera after one iteration
+      this._camOrth.enabled = false;
+    else
+      this._updateTexture = false;
     return;
   }
   
@@ -173,7 +179,7 @@ NNI.prototype.onAfterRender = function(){
   for (var i = 0; i<pixelsIndx.length; i++){
     var ii = pixelsIndx[i]*4;
     var id = this.rgb2hex([p[ii], p[ii+1], p[ii+2]], 255);
-    //if (this.conesW[id] !== undefined)
+    if (this.conesW[id] !== undefined)
     	this.conesW[id] += 1;
   }
   
@@ -195,7 +201,8 @@ NNI.prototype.onAfterRender = function(){
 NNI.prototype.addPoint = function(px, py, alpha){
   // Activate camera to render frame with the new cone
   this._camOrth.enabled = true;
-   
+  // Add an iteration to the render
+  this._updateTexture = true;
   
   // Create material
   // TODO: probably there is a lighter material
@@ -293,12 +300,29 @@ NNI.prototype.movePoint = function(id, px, py){
   var cone = this.cones[id];
   
   if (!cone)
-    return;
+    return false;
   cone.transform.position[0] = (px-0.5)*10;
   cone.transform.position[2] = (py-0.5)*10;
   cone.voronoiPos = [px,py];
   cone.transform.mustUpdate = true;
 
+}
+
+// Remove existing point
+NNI.prototype.removePoint = function(id){
+	var cone = this.cones[id];
+  if (!cone)
+    return false;
+  
+  // Activate camera
+  this._camOrth.enabled = true;
+  // Remove cone
+  cone.parentNode.removeChild(cone);
+  delete this.cones[id];
+  delete this.conesW[id];
+  
+  // Add iteration to render
+  this._updateTexture = true;
 }
 
 // Should return the last computed conesW.
@@ -308,9 +332,24 @@ NNI.prototype.getWeights = function(){
 }
 
 
+// Reset voronoi diagram
+NNI.prototype.reset = function(){
+  var keys = Object.keys(this.cones);
+    for (var i = 0; i < keys.length; i++){
+      var id = keys[i];
+      var cone = this.cones[id];
+      cone.parentNode.removeChild(cone);
+      delete this.cones[id];
+      delete this.conesW[id];
+  }
+  // Activate camera
+  this._camOrth.enabled = true;
+  this._updateTexture = true;
+}
+
 
 // Init NNI. The result takes one iteration
-NNI.prototype.initNNI = NNI.prototype.addNNIPoint = NNI.prototype.moveNNI = function(px, py){
+NNI.prototype.initNNI = NNI.prototype.addNNIPoint = NNI.prototype.moveNNIPoint = function(px, py){
   
   // If averaging cone doesn't exist
   if (!this.cones[this._NNIUid]){
@@ -329,7 +368,7 @@ NNI.prototype.initNNI = NNI.prototype.addNNIPoint = NNI.prototype.moveNNI = func
 }
 
 
-NNI.prototype.removeNNIPoint = function(px, py){
+NNI.prototype.removeNNIPoint = function(){
 	var NNICone = this.cones[this._NNIUid];
   NNICone.parentNode.removeChild(NNICone);
   delete this.cones[this._NNIUid];
@@ -380,7 +419,6 @@ NNI.prototype.onRenderGUI = function(){
   
   gl.start2D();
   // Get texture from camera
-  
   if (this._camOrth){
     if (this._camOrth.enabled){
 			this._texture = this._camOrth._frame.getColorTexture();
@@ -389,8 +427,8 @@ NNI.prototype.onRenderGUI = function(){
   var texture = this._texture;
   
   // Texture pos and size
-  var posx = 64;
-  var posy = 64;
+  var posx = this.GUIX;
+  var posy = this.GUIY;
   var size = 128;
   
   
@@ -398,7 +436,7 @@ NNI.prototype.onRenderGUI = function(){
   var keys = Object.keys(this.conesW);
   // Background rectangle
   gl.fillStyle = "rgba(127,127,127,0.7)";
-  gl.fillRect(posx*0.9, posy*0.9, size*1.1, keys.length * 20 + size*1.1);
+  gl.fillRect(posx-size*0.05, posy-size*0.05, size*1.1, keys.length * 20 + size*1.1);
   
   var lastP = 0;
   for (var i = 0; i<keys.length; i++){
