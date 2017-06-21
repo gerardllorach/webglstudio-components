@@ -33,6 +33,9 @@ function NNI(o) {
   this._startNNI = false;
 	this._NNIUid = null;
   
+  // Create orthogonal camera
+    this._camOrth = new LS.Camera();
+  
   // Create cam node
   this._nodeCam = new LS.SceneNode();
   
@@ -91,22 +94,23 @@ NNI.prototype.onSceneRender = function(){
 // Create camera and add to scene
 NNI.prototype.onStart = function()
 {
-  // Create orthogonal camera
-  if (!this._camOrth){
-    // Create orthogonal camera
-    this._camOrth = new LS.Camera();
-    var conf = JSON.parse(this._camJSON);
-    // FrameSize
-    conf.frame.width = this.frameSize;
-    conf.frame.height = this.frameSize;
-    // Configure camera
-    this._camOrth.configure(conf);
-    // Create node and add camera
-    this._nodeCam.addComponent(this._camOrth);
-    this._nodeCam.transform.rotateX(0.001); // Something is wrong with the center
-    this._nodeCam.name = "NNICamera";
-    this.parentNode.addChild(this._nodeCam);
-	}
+  // Configure orthogonal camera
+  var conf = JSON.parse(this._camJSON);
+  // FrameSize
+  conf.frame.width = this.frameSize;
+  conf.frame.height = this.frameSize;
+  // Configure camera
+  this._camOrth.configure(conf);
+  // Create node and add camera
+  this._nodeCam.addComponent(this._camOrth);
+  this._nodeCam.transform.rotateX(0.001); // Something is wrong with the center
+  this._nodeCam.name = "NNICamera";
+  // Check if node already exists and remove
+  if (this.parentNode.getChildByName("NNICamera"))
+    this.parentNode.removeChild(this.parentNode.getChildByName("NNICamera"));
+  // Add camera node to scene
+  this.parentNode.addChild(this._nodeCam);
+	
   // Reset this.conesW weights
   var keys = Object.keys(this.conesW);
   for (var i = 0; i< keys.length; i++)
@@ -134,6 +138,9 @@ NNI.prototype.onFinish = function()
 // Script called when scene render finished
 NNI.prototype.onAfterRender = function(){
   if (!this._camOrth){
+    return;
+  }
+  if (!this._camOrth._frame){
     return;
   }
   
@@ -179,7 +186,7 @@ NNI.prototype.onAfterRender = function(){
   for (var i = 0; i<pixelsIndx.length; i++){
     var ii = pixelsIndx[i]*4;
     var id = this.rgb2hex([p[ii], p[ii+1], p[ii+2]], 255);
-    if (this.conesW[id] !== undefined)
+    //if (this.conesW[id] !== undefined)
     	this.conesW[id] += 1;
   }
   
@@ -374,7 +381,8 @@ NNI.prototype.removeNNIPoint = function(){
   delete this.cones[this._NNIUid];
   // Ensure that the render2texture frame is without the averaging cone
   // Activate camera
-    this._camOrth.enabled = true;
+  this._camOrth.enabled = true;
+  this._updateTexture = true;
 }
 
 
